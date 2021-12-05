@@ -21,7 +21,7 @@ resource "google_storage_bucket" "config_bucket" {
 
 resource "null_resource" "download_kube_config" {
   provisioner "local-exec" {
-    command = "wsl sh $scripts/download_kube_config.sh ${google_storage_bucket.config_bucket.url} ."
+    command = "sh scripts/download_kube_config.sh ${google_storage_bucket.config_bucket.url} ."
   }
 
   provisioner "local-exec" {

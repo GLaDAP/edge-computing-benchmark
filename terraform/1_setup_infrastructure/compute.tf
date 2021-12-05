@@ -10,6 +10,8 @@ data "google_compute_image" "ubuntu" {
   project = "ubuntu-os-cloud"
 }
 
+
+
 resource "google_compute_instance" "kubeedge_cloudcore" {
   name         = "cloudcore"
   machine_type = "e2-small"
@@ -78,3 +80,4 @@ resource "google_compute_instance" "kubeedge_edgecore" {
     google_compute_subnetwork.compute-subnetwork,
   ]
 }
+

@@ -1,7 +1,6 @@
 #!/bin/bash
 
 set -x
-
 exec > >(tee /var/log/user-data.log|logger -t user-data ) 2>&1
 
 # Letting iptables see bridged traffic
@@ -10,7 +9,6 @@ net.bridge.bridge-nf-call-ip6tables = 1
 net.bridge.bridge-nf-call-iptables = 1
 EOF
 sysctl --system
-
 
 # Installing Docker
 apt-get update
@@ -53,8 +51,22 @@ cp -i /etc/kubernetes/admin.conf /root/.kube/config
 
 # Installing Flannel pod network add-on
 #kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml --kubeconfig=/etc/kubernetes/admin.conf
-
 kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/2140ac876ef134e0ed5af15c65e414cf26827915/Documentation/kube-flannel.yml --kubeconfig=/etc/kubernetes/admin.conf
-
 # Upload the kube config to config bucket
 gsutil cp /root/.kube/config ${config_bucket_url}
+
+######KUBDEEDGE
+# Download keadm
+KEADM_VERSION=keadm-v1.4.0-linux-amd64
+wget --quiet https://github.com/kubeedge/kubeedge/releases/download/v1.4.0/$KEADM_VERSION.tar.gz
+tar -xvzf $KEADM_VERSION.tar.gz
+mv $KEADM_VERSION/keadm/keadm /usr/local/bin/
+rm -rf $KEADM_VERSION $KEADM_VERSION.tar.gz
+
+keadm init --advertise-address="$PUBLIC_IP"
+
+sleep 10
+
+# Upload the keadm join token to config bucket
+keadm gettoken > keadm_token
+gsutil cp keadm_token ${config_bucket_url}

@@ -24,7 +24,7 @@ For the local setup, Vagrant from Hashicorp is used. It provides a way to deploy
 
 1.   Download and install Virtualbox: https://www.virtualbox.org/wiki/Downloads
 2.   Download and install Vagrant: https://www.vagrantup.com/downloads. More information about the installation can be found here: https://www.vagrantup.com/docs/installation. Be aware that running Vagrant with multiple hypervisors can cause problems, as mentioned in the documentation of Vagrant.
-3.   Clone this repository if not done already and navigate to the folder `local`.
+3.   Clone this repository if not done already and navigate to the folder `local_benchmark`.
 
 We take a closer look on the Vagrant file:
 

@@ -1,0 +1,28 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+Vagrant.configure("2") do |config|
+  config.vm.define "cloudcore" do |cloudcore|
+      cloudcore.vm.box = "ubuntu/bionic64"
+      cloudcore.vm.hostname = "cloudcore"
+      cloudcore.vm.synced_folder "manifests/", "/home/vagrant/manifests"
+      cloudcore.vm.network "private_network", ip: "192.168.56.2"
+
+      cloudcore.vm.provider "virtualbox" do |v|
+        v.memory = 2048
+        v.cpus = 2
+      end
+  end
+  (1..3).each do |i|
+    config.vm.define "edgenode-#{i}" do |edgenode|
+        edgenode.vm.box = "ubuntu/bionic64"
+        edgenode.vm.hostname = "edgenode-#{i}"
+        edgenode.vm.synced_folder "manifests/edgecore", "/home/vagrant/manifests/edgecore"
+        edgenode.vm.network "private_network", ip: "192.168.56.#{i + 3}"
+        edgenode.vm.provider "virtualbox" do |v|
+          v.memory = 1024
+          v.cpus = 1
+        end
+    end
+  end
+end

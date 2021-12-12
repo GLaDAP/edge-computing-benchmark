@@ -18,7 +18,7 @@ sudo swapoff -a
 
 # Install containerd
 
-export CONTAINERD_VER=1.3.1
+export CONTAINERD_VER=1.3.4
 curl -Lo /tmp/containerd.tar.gz "https://storage.googleapis.com/cri-containerd-release/cri-containerd-${CONTAINERD_VER}.linux-amd64.tar.gz"
 sudo tar -C / -xzf /tmp/containerd.tar.gz
 sudo systemctl start containerd
@@ -32,11 +32,11 @@ cat <<EOF | sudo tee /etc/apt/sources.list.d/kubernetes.list
 deb https://apt.kubernetes.io/ kubernetes-xenial main
 EOF
 sudo apt-get update
-sudo DEBIAN_FRONTEND=noninteractive apt-get install -y kubelet=1.16.3-00 kubeadm=1.16.3-00 kubectl=1.16.3-00
+sudo DEBIAN_FRONTEND=noninteractive apt-get install -y kubelet=1.21.0-00 kubeadm=1.21.0-00 kubectl=1.21.0-00
 sudo apt-mark hold kubelet kubeadm kubectl
 
 # Install K8s cluster
-sudo kubeadm init --kubernetes-version=1.16.3 --skip-token-print
+sudo kubeadm init --kubernetes-version=1.21.0 --skip-token-print
 
 mkdir -p $HOME/.kube
 sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
@@ -44,12 +44,14 @@ sudo chown $(id -u):$(id -g) $HOME/.kube/config
 # Untaint the master in order to be able to run the cloudcore:
 kubectl taint nodes node-role.kubernetes.io/master- --all
 
-kubectl apply -f manifests/calico.yaml
+#kubectl apply -f manifests/calico.yaml
+kubectl apply -f https://docs.projectcalico.org/manifests/calico.yaml
 
-kubectl create -f https://raw.githubusercontent.com/kubeedge/kubeedge/v1.1.0/build/crds/devices/devices_v1alpha1_device.yaml
-kubectl create -f https://raw.githubusercontent.com/kubeedge/kubeedge/v1.1.0/build/crds/devices/devices_v1alpha1_devicemodel.yaml
 
-curl -sLO https://raw.githubusercontent.com/kubeedge/kubeedge/v1.1.0/build/tools/certgen.sh
+kubectl create -f https://raw.githubusercontent.com/kubeedge/kubeedge/v1.8.0/build/crds/devices/devices_v1alpha2_device.yaml
+kubectl create -f https://raw.githubusercontent.com/kubeedge/kubeedge/v1.8.0/build/crds/devices/devices_v1alpha2_devicemodel.yaml
+
+curl -sLO https://raw.githubusercontent.com/kubeedge/kubeedge/v1.8.0/build/tools/certgen.sh
 chmod +x certgen.sh
 sudo sed -i 's/RANDFILE/#RANDFILE/g' /etc/ssl/openssl.cnf
 sudo ./certgen.sh buildSecret | tee ./manifests/cloudcore/06-secret.yaml

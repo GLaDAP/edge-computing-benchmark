@@ -1,0 +1,110 @@
+---
+- hosts: cloudcore
+  tasks:
+  - user:
+      name: "{{username}}"
+      state: present
+    register: registered_user
+
+  - name: Ensures {{registered_user}}/.kube
+    file: 
+      path: "{{registered_user.home}}/.kube"
+      state: directory
+
+  - name: Copy file
+    copy:
+      src: /etc/kubernetes/admin.conf 
+      dest: "{{registered_user.home}}/.kube/config"
+    become: true
+    become_user: "{{username}}"
+
+  - name: Change file ownership, group and permissions
+    ansible.builtin.file:
+      path: "{{registered_user.home}}/.kube/config"
+      owner: "{{registered_user.uid}}"
+      group: "{{registered_user.group}}"
+    become: true
+    become_user: "{{username}}"
+
+  - name: Untaint the master in order to be able to run the cloudcore
+    command: kubectl taint nodes node-role.kubernetes.io/master- --all
+    become: true
+    become_user: "{{username}}"
+
+  - name: Install Calico
+    command: kubectl apply -f https://docs.projectcalico.org/manifests/calico.yaml
+    become: true
+    become_user: "{{username}}"
+
+  - name: Add Kubeedge device CRDs
+    command: kubectl create -f https://raw.githubusercontent.com/kubeedge/kubeedge/v1.8.0/build/crds/devices/devices_v1alpha2_device.yaml
+    become: true
+    become_user: "{{username}}"
+
+  - name: Add Kubeedge devicemodel CRDs
+    command: kubectl create -f https://raw.githubusercontent.com/kubeedge/kubeedge/v1.8.0/build/crds/devices/devices_v1alpha2_devicemodel.yaml
+    become: true
+    become_user: "{{username}}"
+
+  - name: Download file from a file path
+    get_url:
+      url: https://raw.githubusercontent.com/kubeedge/kubeedge/v1.8.0/build/tools/certgen.sh
+      dest: "{{registered_user.home}}"
+    become: true
+    become_user: "{{username}}"
+
+  - name: Changing perm of "/$HOME/certgen.sh", adding "+x"
+    file: 
+      dest: /{{registered_user.home}}/certgen.sh
+      mode: u+x
+    become: true
+    become_user: "{{username}}"
+
+  - name: get the username running the deploy
+    become: true
+    become_user: "{{username}}"
+    local_action: command whoami
+    register: username_on_the_host
+  - debug: var=username_on_the_host
+
+
+  - name: Ensure directories are 0755
+    command: find /etc/ssl/ -type d -exec chmod 0755 {} \;
+    become: true
+
+  - name: sed randfile 
+    ansible.builtin.replace:
+      path: /etc/ssl/openssl.cnf
+      regexp: 'RANDFILE'
+      replace: '#RANDFILE'
+    become: true
+
+  - name: buildsecret and create secret manifest
+    shell: /{{registered_user.home}}/certgen.sh buildSecret >> /{{registered_user.home}}/manifests/cloudcore/06-secret.yaml
+    become: true
+
+  # Apply manifests for cloudcore and edgecore
+  - name: Apply cloudcore manifests
+    command: kubectl apply -f /{{registered_user.home}}/manifests/cloudcore/
+    become: true
+    become_user: "{{username}}"
+
+  - name: Apply edgecore manifests
+    command: kubectl apply -f /{{registered_user.home}}/manifests/edgecore/
+    become: true
+    become_user: "{{username}}"
+
+  # Create the certificates used to join
+  - name: Ensure manifests/edgecore/certs
+    file: 
+      path: /{{registered_user.home}}/manifests/edgecore/certs
+      state: directory
+
+  - name: Edge certificates
+    shell: kubectl -n kubeedge get secret cloudcore -o jsonpath={.data."edge\.crt"} | base64 -d > /{{registered_user.home}}/manifests/edgecore/certs/edge.crt
+
+  - name: Edge keys
+    shell: kubectl -n kubeedge get secret cloudcore -o jsonpath={.data."edge\.key"} | base64 -d > /{{registered_user.home}}/manifests/edgecore/certs/edge.key
+
+  - name: Root Certificate
+    shell: kubectl -n kubeedge get secret cloudcore -o jsonpath={.data."rootCA\.crt"} | base64 -d > /{{registered_user.home}}/manifests/edgecore/certs/rootCA.crt

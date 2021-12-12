@@ -1,0 +1,12 @@
+{
+  "type": "service_account",
+  "project_id": "edge-benchmark",
+  "private_key_id": "ce8a406e3d761ab5c27d502dd6521ace90f8b4c2",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC076T4uZYDm7GH\nfD99JUHClNZKtt/dZPdI3EdfkjAFAkAicyiRJ80KnbKR0guPFYJnJ2m0ks81J94f\numxWrueSPdVi70XhBNCc7lx3SJwAXiEDs+c64pkVPIX1SwERTfJiYZ1vrouubeqJ\ns+dLsd7hoJuSRsZ8A2QCEEXpxoYXw13/3YH6RTXdn108i2trG0dXtVLobq9MsgER\n28fgpCt6PKd4hgnRNmsJSE6crWCw+5FKQTyYLGN0HfMMKNO0kuOuU49Ed0z6CVBp\nKiBS5WUVHMxKt/E/4WEPWn9HcABAmauJopJ0esJDuhifG5e5XrFZl4pcHN6pkdiU\n4c8c/xU5AgMBAAECggEAKQFQlW/V0B6GVsqxRsbdRuBdSlR0mqOpqTEG2eFzEYeH\nimcnz/HBtcC0efis1vIMeh1EBwDohcbxv6YLrH96CroJtKC+aPci4hXhDcV+WVT7\nzW+FnWJCSD5Nq6Aib04HewVdXTSlAlR1vVxwtEZs2RyBdV6l1/Aax57xgUAVHqgt\n5ABAiVlsBCbPME7rS1mEPBNNfv5axCfyC6onwftPf/pkwzGi/ddS7Rdll2MU9msK\n/t7MLjjcOtGDdQWAgNfwVkJ//Xhr0Zoi7iop8Yx21ZLsDnIGzsCKxZabLorz47Pp\nvSWEEMZnAv81E4zI8e2UtA68sVnUU1QRuUZMGiH+SwKBgQDiuOxcGFHpvUl93STc\ncY0ZMpQ30xFbB37qciNj1bgieL/+AGKzXhHK3T60DsSLwRq6jRehVB4EJXkj1W1X\nRDfop79i/ZW/8YNscq1sJ1dA+JC+8BNGMfMDppGAdMdFXCGPL2eKIjYK3Zpf+r28\nprCVx/oHVU6fdX4VCE4UmwQJTwKBgQDMTRn4nmTcL1ERAIxWoA0ht1fNslY5MS9K\n/nsvwSICsUEmZ3Ac6naqSFEEwjWqH1aC9Jj6H+t6gLXrkRFY+mjNBNuloOgy9yHr\nk3a6xstU2JkFJuYcCFlkcrKyHpLMV2UIBXnc/kb19ZOf4L0YHqimcl3+BbPAewF7\n6OS/zOnG9wKBgDz+YN/5zveh68aHmuYPSlVQDR3jk5S4tIUgBbNTCMGFWKldsy/s\nC79WvAq2uluarLUpRgUp2xVke22PemXyvVPC5TMdY48Kyz9+rncdMlURSeeEMLs+\nrtD5m8VCJWXcfk7GAwXfZEiSC3jsvOSmt3TkIricU5WEh1HjNRZICdLzAoGBAI94\nKZ/dY8j4dX5yGxuOJAqkXUW3UjOxpZuNoGaFw2OOpMjaZPH5eUHVrQehdtw0S6WF\nLZShK9WIY7i81CjfGQ+4tKLYn5eC01BC62L4zbuUq8jha0EOX/BZV8IcFEzppqp+\nZfjanGyHe5cP1NsGVLsmn3kO+g9WklE42MMUnKs7AoGBAKSnBpbMBcCd+g9CfRoW\nav7xE+vn/1CRKXIBDTrjhofngLPDplRTXK8VgyfSRafUE501zVf4dXEVot/Kcxrl\na7XcR9ESMQdyHRngxEEQ3imdL0ckWVuD+fyJ331SoubqaDeSCau6/o6G7A32dIVF\nSGwkgcoeKPg2cXhztAWAGUeD\n-----END PRIVATE KEY-----\n",
+  "client_email": "testing4uni@edge-benchmark.iam.gserviceaccount.com",
+  "client_id": "103870295696324464042",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/testing4uni%40edge-benchmark.iam.gserviceaccount.com"
+}

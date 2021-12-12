@@ -1,0 +1,109 @@
+---
+- hosts: all:!cloudcore
+  tasks:
+  - user:
+      name: "{{username}}"
+      state: present
+    register: registered_user
+
+  - name: Install packages that allow apt to be used over HTTPS
+    apt:
+      name: "{{ packages }}"
+      state: present
+      update_cache: yes
+    vars:
+      packages:
+      - python-apt 
+      - conntrack
+      - docker.io
+      - curl
+    become: true
+
+  - name: Unarchive kubeedge binary
+    ansible.builtin.unarchive:
+      src: https://github.com/kubeedge/kubeedge/releases/download/v1.8.0/kubeedge-v1.8.0-linux-amd64.tar.gz
+      dest: /tmp
+      remote_src: yes
+
+  - name: Ensures /etc/kubeedge/config/
+    file: 
+      path: "/etc/kubeedge/config/"
+      state: directory
+    become: true
+    # become_user: "{{username}}"
+
+  - name: Copy Kubeedge 
+    copy: 
+      src: /tmp/kubeedge-v1.8.0-linux-amd64/edge/edgecore
+      dest: /etc/kubeedge
+      directory_mode: yes
+    become: true
+    # become_user: "{{username}}"
+
+  - name: sed /etc/kubeedge/conf/edgecore.yaml  1
+    ansible.builtin.replace:
+      path: /etc/kubeedge/conf/edgecore.yaml
+      regexp: "fb4ebb70-2783-42b8-b3ef-63e2fd6d242e"
+      replace: "$(hostname)"
+    become: true
+
+  - name: sed /etc/kubeedge/conf/edgecore.yaml  2
+    ansible.builtin.replace:
+      path: /etc/kubeedge/conf/edgecore.yaml
+      regexp: "interface-name:.*"
+      replace: "interface-name: enp0s8"
+    become: true
+
+  - name: sed /etc/kubeedge/conf/edgecore.yaml  3
+    ansible.builtin.replace:
+      path: /etc/kubeedge/conf/edgecore.yaml
+      regexp: "wss://0.0.0.0:10000"
+      replace: "wss://192.168.56.2:10000"
+    become: true
+
+  - name: Ensures /etc/kubeedge/certs/
+    file: 
+      path: "/etc/kubeedge/certs/"
+      state: directory
+    become: true
+
+  - name: Ensure directories are 0755
+    command: find /etc/kubeedge/ -type d -exec chmod 0755 {} \;
+    become: true
+
+  - name: Copy Kubeedge certificates
+    copy: 
+      src: /{{registered_user.home}}/manifests/edgecore/certs
+      dest: /etc/kubeedge
+      directory_mode: yes
+    become: true
+
+  - name: Create edgecore service
+    shell:
+      cmd: |
+        tee /etc/systemd/system/edgecore.service <<EOF
+        [Unit]
+        Description=edgecore.service
+
+        [Service]
+        Type=simple
+        ExecStart=/etc/kubeedge/edgecore
+
+        [Install]
+        WantedBy=multi-user.target
+        EOF
+    become: true
+    # become_user: "{{username}}"
+
+  - shell: systemctl daemon-reload
+    become: true
+
+  - shell: systemctl restart edgecore
+    become: true
+
+  - shell: systemctl enable edgecore
+    become: true
+
+  # - shell: systemctl status edgecore
+  #   become: true
+  #   state: changed

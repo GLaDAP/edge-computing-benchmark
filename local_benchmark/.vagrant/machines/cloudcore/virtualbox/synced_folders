@@ -1,0 +1,1 @@
+{"virtualbox":{"/home/vagrant/manifests":{"guestpath":"/home/vagrant/manifests","hostpath":"/home/gladap/Documents/edge-computing-benchmark/local_benchmark/manifests","disabled":false,"__vagrantfile":true},"/vagrant":{"guestpath":"/vagrant","hostpath":"/home/gladap/Documents/edge-computing-benchmark/local_benchmark","disabled":false,"__vagrantfile":true}}}

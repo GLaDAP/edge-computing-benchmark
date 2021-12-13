@@ -1,66 +1,95 @@
 ---
 - hosts: all:!cloudcore
-  become: true
+  vars:
+      cloud_ip: 192.168.56.2
   tasks:
-  - name: Ensure docker service is running
-    systemd:
-      name: docker
-      state: started
   - user:
       name: "{{username}}"
       state: present
     register: registered_user
-   
+
+  - name: Install packages that allow apt to be used over HTTPS
+    apt:
+      name: "{{ packages }}"
+      state: present
+      update_cache: yes
+    vars:
+      packages:
+      - python-apt 
+      - conntrack
+      - docker.io
+      - curl
+    become: true
+
+  - name: Ensure docker service is running
+    systemd:
+      name: docker
+      state: started
+    become: true
+
   - name: Add edge user to docker group
     user:
       name: "{{ username }}"
       groups: "docker, systemd-journal"
+    become: true
     
-  # - name: Allow HTTP pulling from private docker registry
-  #   shell: echo '{ "insecure-registries":["{{ registry_ip }}"] }' > /etc/docker/daemon.json
-
   - name: Restart docker service
     command: systemctl restart docker
+    become: true
 
   - name: Reload ip settings
     command: sysctl -p
+    become: true
+
+  - name: Reload ip settings
+    command: sysctl -p
+    become: true
 
   - name: Get KubeEdge and unarchive it
     unarchive:
-      src: https://github.com/kubeedge/kubeedge/releases/download/v1.8.1/keadm-v1.8.1-linux-amd64.tar.gz
+      src: https://github.com/kubeedge/kubeedge/releases/download/v1.8.0/keadm-v1.8.0-linux-amd64.tar.gz
       dest: "/{{registered_user.home}}"
       remote_src: true
+    become: true
 
   - name: Make KubeEdge executable
     file:
-      dest: "/{{registered_user.home}}/keadm-v1.8.1-linux-amd64/keadm/keadm"
+      dest: "/{{registered_user.home}}/keadm-v1.8.0-linux-amd64/keadm/keadm"
       mode: +x
+    become: true
 
   - name: Move KubeEdge executable
-    command: mv "/{{registered_user.home}}/keadm-v1.8.1-linux-amd64/keadm/keadm" /usr/local/bin
+    command: mv "/{{registered_user.home}}/keadm-v1.8.0-linux-amd64/keadm/keadm" /usr/local/bin
+    become: true
 
   - name: Remove unneeded KubeEdge files
     file:
       path: "{{ item }}"
       state: absent
     with_items:
-      - "/{{registered_user.home}}/keadm-v1.8.1-linux-amd64"
-      - "/{{registered_user.home}}/keadm-v1.8.1-linux-amd64.tar.gz"
+      - "/{{registered_user.home}}/keadm-v1.8.0-linux-amd64"
+      - "/{{registered_user.home}}/keadm-v1.8.0-linux-amd64.tar.gz"
+    become: true
 
-  - name: Wait for join command to be finished on cloud controller
-    local_action:
-      module: wait_for
-      path: /{{registered_user.home}}/manifests/edgecore/join-command.txt
+  - name: Wait for join token to be finished on cloud controller
+    wait_for:
+      path: /{{registered_user.home}}/manifests/edgecore/join-token.txt
+      state: present
     become: false
 
-  - name: Copy the join command to the edge node
+  - name: Copy the join token to the edge node
     copy: 
-      src: /{{registered_user.home}}/manifests/edgecore/join-command.txt 
-      dest: /{{registered_user.home}}/manifests/edgecore/join-command.txt
+      src: /{{registered_user.home}}/manifests/edgecore/join-token.txt 
+      dest: /{{registered_user.home}}/join-token.txt
+      remote_src: true
+    become: true
 
   - name: Join the cloud controller kubernetes server
-    shell: "nohup keadm join --cloudcore-ipport=192.168.56.2:10000 --token=$(cat /{{registered_user.home}}/manifests/edgecore//join-command.txt) --kubeedge-version=1.8.1"
-    become: true 
+    shell: "keadm join --cloudcore-ipport={{ cloud_ip }}:10000 --token=$(cat /{{registered_user.home}}/join-token.txt) --kubeedge-version=1.8.0"
+    become: true
+
   handlers:
     - name: docker status
-      service: name=docker state=started
+      service:
+        name: docker
+        state: started

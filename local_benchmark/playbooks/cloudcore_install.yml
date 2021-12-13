@@ -1,5 +1,7 @@
 ---
 - hosts: cloudcore
+  vars:
+      cloud_ip: 192.168.56.2
   become: true
   tasks:
   - name: Add containerd configuration
@@ -90,7 +92,6 @@
       state: present
       filename: kubernetes.list
 
-  # Use this version with KubeEdge 1.6.1
   - name: Install Kubernetes binaries
     apt: 
       name: "{{ packages }}"
@@ -101,7 +102,6 @@
         - kubelet=1.21.0-00
         - kubeadm=1.21.0-00
         - kubectl=1.21.0-00
-
   - name: Hold kubelet
     dpkg_selections:
       name: kubelet
@@ -116,10 +116,3 @@
     dpkg_selections:
       name: kubelet
       selection: hold
-
-  - name: Initialize the Kubernetes cluster using kubeadm
-    command: kubeadm init --kubernetes-version=1.21.0 --skip-token-print
-
-  - file:
-      path: /etc/kubernetes/admin.conf
-      mode: o+r

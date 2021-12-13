@@ -1,10 +1,22 @@
 ---
 - hosts: cloudcore
+  vars:
+      cloud_ip: 192.168.56.2
   tasks:
   - user:
       name: "{{username}}"
       state: present
     register: registered_user
+
+  # Initialize the kubernetes cluster.
+  - name: Initialize the Kubernetes cluster using kubeadm
+    command: kubeadm init --kubernetes-version=1.21.0 --apiserver-advertise-address={{ cloud_ip }} --apiserver-cert-extra-sans={{ cloud_ip }}
+    become: true
+
+  - file:
+      path: /etc/kubernetes/admin.conf
+      mode: o+r
+    become: true
 
   - name: Ensures {{registered_user}}/.kube
     file: 
@@ -17,6 +29,18 @@
       dest: "{{registered_user.home}}/.kube/config"
     become: true
     become_user: "{{username}}"
+
+  - name: Ensures /root/.kube
+    file: 
+      path: "/root/.kube"
+      state: directory
+    become: true
+
+  - name: Copy kubeconfig to "/root/.kube/config"
+    copy:
+      src: /etc/kubernetes/admin.conf 
+      dest: "/root/.kube/config"
+    become: true
 
   - name: Change file ownership, group and permissions
     ansible.builtin.file:
@@ -36,75 +60,20 @@
     become: true
     become_user: "{{username}}"
 
-  - name: Add Kubeedge device CRDs
-    command: kubectl create -f https://raw.githubusercontent.com/kubeedge/kubeedge/v1.8.0/build/crds/devices/devices_v1alpha2_device.yaml
-    become: true
-    become_user: "{{username}}"
+  # Download and unpack keadm for cloudcore installation.
+  - name: Unarchive keadm
+    ansible.builtin.unarchive:
+      src: https://github.com/kubeedge/kubeedge/releases/download/v1.8.2/keadm-v1.8.2-linux-amd64.tar.gz
+      dest: "/{{registered_user.home}}/"
+      remote_src: yes
 
-  - name: Add Kubeedge devicemodel CRDs
-    command: kubectl create -f https://raw.githubusercontent.com/kubeedge/kubeedge/v1.8.0/build/crds/devices/devices_v1alpha2_devicemodel.yaml
-    become: true
-    become_user: "{{username}}"
-
-  - name: Download file from a file path
-    get_url:
-      url: https://raw.githubusercontent.com/kubeedge/kubeedge/v1.8.0/build/tools/certgen.sh
-      dest: "{{registered_user.home}}"
-    become: true
-    become_user: "{{username}}"
-
-  - name: Changing perm of "/$HOME/certgen.sh", adding "+x"
+  - name: Make keadm executable
     file: 
-      dest: /{{registered_user.home}}/certgen.sh
+      dest: /{{registered_user.home}}/keadm-v1.8.2-linux-amd64/keadm/keadm
       mode: u+x
     become: true
-    become_user: "{{username}}"
 
-  - name: get the username running the deploy
+  - name: Execute keadm
+    command: |
+      {{registered_user.home}}/keadm-v1.8.2-linux-amd64/keadm/keadm init --kubeedge-version=1.8.2 --advertise-address={{ cloud_ip }} --kube-config=/{{registered_user.home}}/.kube/config
     become: true
-    become_user: "{{username}}"
-    local_action: command whoami
-    register: username_on_the_host
-  - debug: var=username_on_the_host
-
-
-  - name: Ensure directories are 0755
-    command: find /etc/ssl/ -type d -exec chmod 0755 {} \;
-    become: true
-
-  - name: sed randfile 
-    ansible.builtin.replace:
-      path: /etc/ssl/openssl.cnf
-      regexp: 'RANDFILE'
-      replace: '#RANDFILE'
-    become: true
-
-  - name: buildsecret and create secret manifest
-    shell: /{{registered_user.home}}/certgen.sh buildSecret >> /{{registered_user.home}}/manifests/cloudcore/06-secret.yaml
-    become: true
-
-  # Apply manifests for cloudcore and edgecore
-  - name: Apply cloudcore manifests
-    command: kubectl apply -f /{{registered_user.home}}/manifests/cloudcore/
-    become: true
-    become_user: "{{username}}"
-
-  - name: Apply edgecore manifests
-    command: kubectl apply -f /{{registered_user.home}}/manifests/edgecore/
-    become: true
-    become_user: "{{username}}"
-
-  # Create the certificates used to join
-  - name: Ensure manifests/edgecore/certs
-    file: 
-      path: /{{registered_user.home}}/manifests/edgecore/certs
-      state: directory
-
-  - name: Edge certificates
-    shell: kubectl -n kubeedge get secret cloudcore -o jsonpath={.data."edge\.crt"} | base64 -d > /{{registered_user.home}}/manifests/edgecore/certs/edge.crt
-
-  - name: Edge keys
-    shell: kubectl -n kubeedge get secret cloudcore -o jsonpath={.data."edge\.key"} | base64 -d > /{{registered_user.home}}/manifests/edgecore/certs/edge.key
-
-  - name: Root Certificate
-    shell: kubectl -n kubeedge get secret cloudcore -o jsonpath={.data."rootCA\.crt"} | base64 -d > /{{registered_user.home}}/manifests/edgecore/certs/rootCA.crt

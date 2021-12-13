@@ -14,7 +14,7 @@ Vagrant.configure("2") do |config|
     end
 
     config.vm.provision "ansible_local" do |cloudcore_step_1|
-      cloudcore_step_1.playbook = "playbooks/base_install.yml"
+      cloudcore_step_1.playbook = "playbooks/cloudcore_install.yml"
       cloudcore_step_1.config_file = "playbooks/ansible.cfg"
     end
 
@@ -25,27 +25,47 @@ Vagrant.configure("2") do |config|
         username: "vagrant"
       }
     end
-  end
 
-  # (1..1).each do |i|
-	# 	# Defining VM properties
-	# 	config.vm.define "edgenode-#{i}" do |edgenode|
-  #     edgenode.vm.box = "ubuntu/bionic64"
-  #     edgenode.vm.hostname = "edgenode-#{i}"
-  #     edgenode.vm.synced_folder "manifests/edgecore", "/home/vagrant/manifests/edgecore"
-  #     edgenode.vm.network "private_network", ip: "192.168.56.#{i + 3}"
-	# 		config.vm.provider "virtualbox" do |edgenode|
-	# 			# The VM will be named as edureka_vm{i}
-  #       edgenode.memory = 1024
-  #       edgenode.cpus = 1
-	# 		end
-  #     config.vm.provision "ansible_local" do |ansible_edge|
-  #       ansible_edge.playbook = "playbooks/edge_startup.yml"
-  #       ansible_edge.config_file = "playbooks/ansible.cfg"
-  #       ansible_edge.extra_vars = {
-  #         username: "vagrant"
-  #       }
-  #     end
-	# 	end
-	# end
+    config.vm.provision "ansible_local" do |cloudcore_step_3|
+      cloudcore_step_3.playbook = "playbooks/token_generation.yml"
+      cloudcore_step_3.config_file = "playbooks/ansible.cfg"
+      cloudcore_step_3.extra_vars = {
+        username: "vagrant"
+      }
+    end
+  end
+end
+Vagrant.configure("2") do |config_edge|
+  config_edge.vm.box = "ubuntu/bionic64"
+  config_edge.vm.synced_folder "manifests/edgecore", "/home/vagrant/manifests/edgecore"
+  config_edge.vm.provider "virtualbox" do |box_config|
+    box_config.memory = 1024
+    box_config.cpus = 1
+  end
+  N = 3
+  (1..N).each do |edge_id|
+    config_edge.vm.define "edgenode-#{edge_id}" do |edgenode|
+      # Defining VM properties
+      edgenode.vm.hostname = "edgenode-#{edge_id}"
+      edgenode.vm.network "private_network", ip: "192.168.56.#{edge_id + 3}"
+      if edge_id == N
+        edgenode.vm.provision "ansible" do |ansible_edge_1|
+          ansible_edge_1.limit = "all"
+          ansible_edge_1.playbook = "playbooks/edgecore_install.yml"
+          ansible_edge_1.config_file = "playbooks/ansible.cfg"
+          ansible_edge_1.extra_vars = {
+            username: "vagrant"
+          }
+        end
+        edgenode.vm.provision "ansible" do |ansible_edge_2|
+          ansible_edge_2.limit = "all"
+          ansible_edge_2.playbook = "playbooks/edge_startup.yml"
+          ansible_edge_2.config_file = "playbooks/ansible.cfg"
+          ansible_edge_2.extra_vars = {
+            username: "vagrant"
+          }
+        end
+      end
+		end
+	end
 end

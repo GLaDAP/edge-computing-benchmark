@@ -29,100 +29,82 @@ For the local setup, Vagrant from Hashicorp is used. It provides a way to deploy
 We take a closer look on the Vagrant file:
 
 ```ruby
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
 Vagrant.configure("2") do |config|
   config.vm.define "cloudcore" do |cloudcore|
-      cloudcore.vm.box = "hashicorp/bionic64"
-      cloudcore.vm.hostname = "cloudcore"
-      cloudcore.vm.synced_folder "manifests/", "/home/vagrant/manifests"
-      cloudcore.vm.network "private_network", ip: "192.168.56.2"
+    cloudcore.vm.box = "ubuntu/bionic64"
+    cloudcore.vm.hostname = "cloudcore"
+    cloudcore.vm.synced_folder "manifests/", "/home/vagrant/manifests"
+    cloudcore.vm.network "private_network", ip: "192.168.56.2"
 
-      cloudcore.vm.provider "virtualbox" do |v|
-        v.memory = 2042
-        v.cpus = 2
-      end
-  end
-  (1..3).each do |i|
-    config.vm.define "edgenode-#{i}" do |edgenode|
-        edgenode.vm.box = "hashicorp/bionic64"
-        edgenode.vm.hostname = "edgenode-#{i}"
-        edgenode.vm.synced_folder "manifests/edgecore", "/home/vagrant/manifests/edgecore"
-        edgenode.vm.network "private_network", ip: "192.168.56.#{i + 3}"
+    cloudcore.vm.provider "virtualbox" do |v|
+      v.memory = 2048
+      v.cpus = 2
     end
-  end
-end
 
+    config.vm.provision "ansible_local" do |cloudcore_step_1|
+      cloudcore_step_1.playbook = "playbooks/cloudcore_install.yml"
+      cloudcore_step_1.config_file = "playbooks/ansible.cfg"
+    end
+
+    config.vm.provision "ansible_local" do |cloudcore_step_2|
+      cloudcore_step_2.playbook = "playbooks/controller_startup.yml"
+      cloudcore_step_2.config_file = "playbooks/ansible.cfg"
+      cloudcore_step_2.extra_vars = {
+        username: "vagrant"
+      }
+    end
+
+    config.vm.provision "ansible_local" do |cloudcore_step_3|
+      cloudcore_step_3.playbook = "playbooks/token_generation.yml"
+      cloudcore_step_3.config_file = "playbooks/ansible.cfg"
+      cloudcore_step_3.extra_vars = {
+        username: "vagrant"
+      }
+    end
+
+  end
+
+  (1..3).each do |i|
+		# Defining VM properties
+		config.vm.define "edgenode-#{i}" do |edgenode|
+      edgenode.vm.box = "ubuntu/bionic64"
+      edgenode.vm.hostname = "edgenode-#{i}"
+      edgenode.vm.synced_folder "manifests/edgecore", "/home/vagrant/manifests/edgecore"
+      edgenode.vm.network "private_network", ip: "192.168.56.#{i + 3}"
+			config.vm.provider "virtualbox" do |edgenode|
+        edgenode.memory = 1024
+        edgenode.cpus = 1
+			end
+      config.vm.provision "ansible_local" do |ansible_edge_1|
+        ansible_edge_1.playbook = "playbooks/edgecore_install.yml"
+        ansible_edge_1.config_file = "playbooks/ansible.cfg"
+        ansible_edge_1.extra_vars = {
+          username: "vagrant"
+        }
+      end
+      config.vm.provision "ansible_local" do |ansible_edge_2|
+        ansible_edge_2.playbook = "playbooks/edge_startup.yml"
+        ansible_edge_2.config_file = "playbooks/ansible.cfg"
+        ansible_edge_2.extra_vars = {
+          username: "vagrant"
+        }
+      end
+		end
+	end
+end
 ```
 
-The Vagrant file contains Ruby-code with definitions of our virtual machines. As can be seen, we create a cloudcore VM and 3 EdgeCore nodes. Under the `cloudcore.vm.provider` we can specify other specifications than the default specifications with Virtualbox. More options can be found in the [documentation](https://www.vagrantup.com/docs/providers/virtualbox/configuration). This number can be changed by modifying the number in the for-loop. There is also a [synced folder](https://www.vagrantup.com/docs/synced-folders): the manifest folder. This folder, while residing on the host, can be accessed by the VM's. This folder contains all the manifests needed to install CloudCore and EdgeCore on the VM's. 
+The Vagrant file contains Ruby-code with definitions of our virtual machines. As can be seen, we create a cloudcore VM and 3 EdgeCore nodes. Under the `cloudcore.vm.provider` we can specify other specifications than the default specifications with Virtualbox. More options can be found in the [documentation](https://www.vagrantup.com/docs/providers/virtualbox/configuration). 
+
+The number of edge cores can be changed by modifying the number in the for-loop. There is also a [synced folder](https://www.vagrantup.com/docs/synced-folders): the manifest folder. This folder, while residing on the host, can be accessed by the VM's. This folder is used to share the join token with the edgecores.
 
 -   *NOTE: The IP-address assigned to the nodes should be in the allowed range speficied in the Virtualbox networks.conf file, otherwise an error is thrown.*
 -   *NOTE: Do not change the Vagrantfile while having VMs deployed. Otherwise the VMs are not recognized.*
 
-**Manual preparation of node manifests**
-
-For each node, we need to create a separate *yaml* file with the node definitions under `manifest/edgecore/node_#.yaml`, where `#` is a number:
-
-```
-apiVersion: v1
-kind: Node
-metadata:
-  name: edgenode-1
-  namespace: edgenode
-  labels:
-    name: edgenode-1
-    node-role.kubernetes.io/edge: ""
-spec:
-  taints:
-  - effect: NoSchedule
-    key: node-role.kubeedge.io
-    value: edge
-
-```
-
-So in case of three nodes, we will have three files, each with different name under metadata and labels: `edgenode-1`, `edgenode-2`, `edgenode-3` etc.. and in separate files: `node_1.yaml`, `node_2.yaml` etc..
-
-Now we continue with deploying the VM's:
-
-**Cloudcore setup**
-
-4.   Execute `vagrant up --provider virtualbox` and wait until all the VM's are created.
-
-5.   ssh into the cloudcore VM using `vagrant ssh cloudcore`.
-
-6.   Copy the `cloudcore_init.sh` from `manifest/cloudcore_init.sh` and apply executable rights:
-
-     ```shell
-     cp manifests/cloudcore_init.sh cloudcore_init.sh
-     chmod +x cloudcore_init.sh
-     ./cloudcore_init.sh
-     ```
-
-7.   Execute the script `./cloudcore_init.sh`.
-
-8.   Check if the cloudcore is deployed:
-
-     ```shell
-     vagrant@cloudcore:~$ kubectl -n kubeedge get deploy,svc
-     NAME                        READY   UP-TO-DATE   AVAILABLE   AGE
-     deployment.apps/cloudcore   0/1     1            0           19s
-     
-     NAME                TYPE       CLUSTER-IP       EXTERNAL-IP   PORT(S)           AGE
-     service/cloudcore   NodePort   10.103.200.111   <none>        10000:30000/TCP   19s
-     ```
-
-**Edgecore setup**
-
-This should be better automated (with options like s[hell execution in provisioning](https://www.vagrantup.com/docs/provisioning/shell)), but for each edgenode:
-
-9.   ssh into the edgenode VM using `vagrant ssh edgenode-#` where `#` is the number of the edgenode
-
-10.   Copy the `edgecore_init.sh` from `manifest/edgecore/edgecore_init.sh` and apply executable rights. Then execute the script:
-
-      ```shell
-      cp manifests/edgecore/edgecore_init.sh edgecore_init.sh
-      chmod +x edgecore_init.sh
-      ./edgecore_init.sh
-      ```
+4.   Execute `vagrant up --provider virtualbox` and wait until all the VM's are created. This can take some time depending on the amount of VM's specified as each VM is created and then the Ansible playbooks are ran.
 
 **Verification**
 
@@ -132,11 +114,11 @@ First, we check if all the nodes are created and known to the cloudcore:
 
 ```shell
 vagrant@cloudcore:~$ kubectl get nodes
-NAME         STATUS   ROLES    AGE     VERSION
-cloudcore    Ready    master   9m29s   v1.16.3
-edgenode-1   Ready    edge     9m20s   v1.15.3-kubeedge-v1.1.0
-edgenode-2   Ready    edge     9m20s   v1.15.3-kubeedge-v1.1.0
-edgenode-3   Ready    edge     9m20s   v1.15.3-kubeedge-v1.1.0
+NAME         STATUS   ROLES                  AGE   VERSION
+cloudcore    Ready    control-plane,master   10m   v1.21.0
+edgenode-1   Ready    agent,edge             12s   v1.19.3-kubeedge-v1.8.0
+edgenode-2   Ready    agent,edge             17s   v1.19.3-kubeedge-v1.8.0
+edgenode-3   Ready    agent,edge             16s   v1.19.3-kubeedge-v1.8.0
 ```
 
 Then we can deploy a simple container to the edgenodes:
@@ -163,8 +145,6 @@ All the VMs can be cleaned up using:
 vagrant destroy -f
 ```
 
-
-
 ## Preparation Google Cloud
 
 *This part is still under development*
@@ -186,3 +166,4 @@ In order to setup the infrastructure on Google Cloud, a couple of things needs t
 # References
 
 -   Part of the code to run the benchmark locally is derived from the repository [johnscheuer/kubeedge-setup](johnscheuer/kubeedge-setup).
+-   Part of the ansible + vagrant configuration structure is from https://dev.to/project42/parallel-provisioning-with-vagrant-and-ansible-lgc

@@ -1,0 +1,56 @@
+---
+- hosts: cloudcore
+  become: true
+  tasks:
+  - user:
+      name: "{{username}}"
+      state: present
+    register: registered_user
+
+  - name: Get cergen and fix permissions
+    get_url:
+      url: https://raw.githubusercontent.com/kubeedge/kubeedge/master/build/tools/certgen.sh
+      dest: "{{registered_user.home}}"
+      mode: '0755'
+
+
+  - name: Get cergen and fix permissions
+    get_url:
+      url: https://github.com/kubernetes-sigs/metrics-server/releases/download/v0.5.2/components.yaml
+      dest: "{{registered_user.home}}/deploy.yaml"
+      mode: '0755'
+
+
+  - name: Move certgen to KubeEdge directory
+    command: mv "{{registered_user.home}}/certgen.sh" /etc/kubeedge/
+
+  - name: Execute certgen
+    shell: CLOUDCOREIPS="{{ cloud_ip }}" /etc/kubeedge/certgen.sh stream
+  
+  - name: Add ip to ip table
+    command: iptables -t nat -A OUTPUT -p tcp --dport 10351 -j DNAT --to {{ cloud_ip }}:10003
+
+  - name: Enable cloudstream
+    shell: "sed -z 's/enable: false/enable: true/2' /etc/kubeedge/config/cloudcore.yaml > {{registered_user.home}}/cloudcore.yaml" 
+    args:
+      warn: false
+
+  - name: Move the newly created cloudcore to KubeEdge directory
+    command: mv -f "{{registered_user.home}}/cloudcore.yaml" /etc/kubeedge/config/cloudcore.yaml
+
+  - name: Kill cloudcore
+    command: pkill cloudcore
+
+  - name: Restart cloudcore
+    command: sudo su -c 'nohup cloudcore > cloudcore.log 2>&1 &'
+    args:
+      warn: false
+
+  - name: Copy kubeconfig to "/root/.kube/config"
+    copy:
+      src: "{{registered_user.home}}/manifests/cloudcore/metrics.yaml"
+      dest: "{{registered_user.home}}/metrics.yaml"
+      remote_src: true
+
+  - name: Add metrics server
+    command: kubectl apply -f {{registered_user.home}}/metrics.yaml

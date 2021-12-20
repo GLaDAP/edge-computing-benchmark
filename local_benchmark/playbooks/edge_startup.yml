@@ -13,10 +13,8 @@
       update_cache: yes
     vars:
       packages:
-      - python-apt 
       - conntrack
       - docker.io
-      - curl
     become: true
 
   - name: Ensure docker service is running
@@ -69,21 +67,51 @@
       - "/{{registered_user.home}}/keadm-v1.8.0-linux-amd64.tar.gz"
     become: true
 
-  - name: Wait for join token to be finished on cloud controller
+  - name: Wait for join command to be finished on cloud controller
     wait_for:
-      path: /{{registered_user.home}}/manifests/edgecore/join-token.txt
+      path: /{{registered_user.home}}/manifests/edgecore/join-command.txt
       state: present
     become: false
 
-  - name: Copy the join token to the edge node
+  - name: Copy the join command to the edge node
     copy: 
-      src: /{{registered_user.home}}/manifests/edgecore/join-token.txt 
-      dest: /{{registered_user.home}}/join-token.txt
+      src: /{{registered_user.home}}/manifests/edgecore/join-command.txt 
+      dest: /{{registered_user.home}}/join-command.txt
       remote_src: true
     become: true
 
   - name: Join the cloud controller kubernetes server
-    shell: "keadm join --cloudcore-ipport={{ cloud_ip }}:10000 --token=$(cat /{{registered_user.home}}/join-token.txt) --kubeedge-version=1.8.0"
+    shell: "$(cat join-command.txt)"
+    become: true
+
+  ####################### LOGGING #################################
+
+  - name: Enable edgestream
+    shell: "sed -z 's/enable: false/enable: true/3' /etc/kubeedge/config/edgecore.yaml > edgecore.yaml" 
+    args:
+      warn: false
+    become: true
+
+  - name: Move the newly created edgecore to KubeEdge directory
+    command: mv -f "/{{registered_user.home}}/edgecore.yaml" /etc/kubeedge/config/edgecore.yaml
+    become: true
+
+  - name: Disable KubeProxy restart
+    shell: "sed '/^ExecStart=.*/a Environment=\"CHECK_EDGECORE_ENVIRONMENT=false\"' /etc/kubeedge/edgecore.service > edgecore.service" 
+    args:
+      warn: false
+    become: true
+
+  - name: Move the newly created edgecore service to KubeEdge directory
+    command: mv -f "/{{registered_user.home}}/edgecore.service" /etc/kubeedge/edgecore.service
+    become: true
+
+  - name: Kill kube-proxy
+    shell: pkill kube-proxy || true
+    become: true
+
+  - name: Restart edgecore
+    command: systemctl restart edgecore.service
     become: true
 
   handlers:

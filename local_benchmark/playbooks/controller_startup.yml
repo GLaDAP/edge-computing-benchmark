@@ -136,3 +136,22 @@
   - name: Add metrics server
     command: kubectl apply -f {{registered_user.home}}/metrics.yaml
     become: true
+
+  ################################### TOKEN #####################################
+  - name: Get join token console
+    command: |
+      {{registered_user.home}}/keadm-v1.8.2-linux-amd64/keadm/keadm gettoken
+    register: token_command
+    become: true
+
+  - local_action:
+      module: copy
+      content: "keadm join --cloudcore-ipport={{ cloud_ip.stdout }}:10000 --token={{ token_command.stdout }} --kubeedge-version=1.8.0"
+      dest: "/{{registered_user.home}}/join-command.txt"
+
+  - name: Copy join token to shared folder
+    copy:
+      src: "/{{registered_user.home}}/join-command.txt"
+      dest: "/{{registered_user.home}}/manifests/edgecore/join-command.txt"
+      remote_src: true
+    become: true

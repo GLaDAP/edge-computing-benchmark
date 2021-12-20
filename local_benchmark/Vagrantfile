@@ -7,25 +7,14 @@ Vagrant.configure("2") do |config|
     cloudcore.vm.hostname = "cloudcore"
     cloudcore.vm.synced_folder "manifests/", "/home/vagrant/manifests"
     cloudcore.vm.network "private_network", ip: "192.168.56.2"
-
     cloudcore.vm.provider "virtualbox" do |v|
       v.memory = 2048
       v.cpus = 2
     end
-
     config.vm.provision "ansible_local" do |cloudcore_step_1|
       cloudcore_step_1.playbook = "playbooks/cloud_playbook.yml"
       cloudcore_step_1.config_file = "playbooks/ansible.cfg"
     end
-    config.vm.provision "ansible_local" do |cloudcore_step_3|
-      cloudcore_step_3.playbook = "playbooks/token_generation.yml"
-      cloudcore_step_3.config_file = "playbooks/ansible.cfg"
-      cloudcore_step_3.extra_vars = {
-        username: "vagrant",
-        cloud_ip: "192.168.56.2"
-      }
-    end
-
   end
 end
 Vagrant.configure("2") do |config_edge|
@@ -47,8 +36,7 @@ Vagrant.configure("2") do |config_edge|
           ansible_edge_1.playbook = "playbooks/edge_playbook.yml"
           ansible_edge_1.config_file = "playbooks/ansible.cfg"
           ansible_edge_1.extra_vars = {
-            username: "vagrant",
-            cloud_ip: "192.168.56.2"
+            username: "vagrant"
           }
         end
       end

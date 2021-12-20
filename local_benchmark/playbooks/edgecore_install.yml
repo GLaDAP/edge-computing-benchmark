@@ -40,7 +40,7 @@
       update_cache: yes
     vars:
       packages:
-      - python-apt 
+      - python3-apt 
       - apt-transport-https
       - ca-certificates
       - curl
@@ -97,5 +97,5 @@
 
   - name: Hold kubectl
     dpkg_selections:
-      name: kubelet
+      name: kubectl
       selection: hold

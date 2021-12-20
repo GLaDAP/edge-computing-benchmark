@@ -1,0 +1,4 @@
+---
+- import_playbook: edgecore_install.yml
+- import_playbook: edge_startup.yml
+- import_playbook: edge_log.yml

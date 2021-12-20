@@ -14,19 +14,9 @@ Vagrant.configure("2") do |config|
     end
 
     config.vm.provision "ansible_local" do |cloudcore_step_1|
-      cloudcore_step_1.playbook = "playbooks/cloudcore_install.yml"
+      cloudcore_step_1.playbook = "playbooks/cloud_playbook.yml"
       cloudcore_step_1.config_file = "playbooks/ansible.cfg"
     end
-
-    config.vm.provision "ansible_local" do |cloudcore_step_2|
-      cloudcore_step_2.playbook = "playbooks/controller_startup.yml"
-      cloudcore_step_2.config_file = "playbooks/ansible.cfg"
-      cloudcore_step_2.extra_vars = {
-        username: "vagrant",
-        cloud_ip: "192.168.56.2"
-      }
-    end
-
     config.vm.provision "ansible_local" do |cloudcore_step_3|
       cloudcore_step_3.playbook = "playbooks/token_generation.yml"
       cloudcore_step_3.config_file = "playbooks/ansible.cfg"
@@ -35,14 +25,7 @@ Vagrant.configure("2") do |config|
         cloud_ip: "192.168.56.2"
       }
     end
-    config.vm.provision "ansible_local" do |cloudcore_step_3|
-      cloudcore_step_3.playbook = "playbooks/controller_log.yml"
-      cloudcore_step_3.config_file = "playbooks/ansible.cfg"
-      cloudcore_step_3.extra_vars = {
-        username: "vagrant",
-        cloud_ip: "192.168.56.2"
-      }
-    end
+
   end
 end
 Vagrant.configure("2") do |config_edge|
@@ -52,7 +35,7 @@ Vagrant.configure("2") do |config_edge|
     box_config.memory = 1024
     box_config.cpus = 1
   end
-  N = 2
+  N = 1 # One edgenode(s)
   (1..N).each do |edge_id|
     config_edge.vm.define "edgenode-#{edge_id}" do |edgenode|
       # Defining VM properties
@@ -61,26 +44,11 @@ Vagrant.configure("2") do |config_edge|
       if edge_id == N
         edgenode.vm.provision "ansible" do |ansible_edge_1|
           ansible_edge_1.limit = "all"
-          ansible_edge_1.playbook = "playbooks/edgecore_install.yml"
+          ansible_edge_1.playbook = "playbooks/edge_playbook.yml"
           ansible_edge_1.config_file = "playbooks/ansible.cfg"
           ansible_edge_1.extra_vars = {
-            username: "vagrant"
-          }
-        end
-        edgenode.vm.provision "ansible" do |ansible_edge_2|
-          ansible_edge_2.limit = "all"
-          ansible_edge_2.playbook = "playbooks/edge_startup.yml"
-          ansible_edge_2.config_file = "playbooks/ansible.cfg"
-          ansible_edge_2.extra_vars = {
-            username: "vagrant"
-          }
-        end
-        edgenode.vm.provision "ansible" do |ansible_edge_3|
-          ansible_edge_3.limit = "all"
-          ansible_edge_3.playbook = "playbooks/edge_log.yml"
-          ansible_edge_3.config_file = "playbooks/ansible.cfg"
-          ansible_edge_3.extra_vars = {
-            username: "vagrant"
+            username: "vagrant",
+            cloud_ip: "192.168.56.2"
           }
         end
       end

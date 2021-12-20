@@ -100,6 +100,7 @@
         - kubelet=1.21.0-00
         - kubeadm=1.21.0-00
         - kubectl=1.21.0-00
+
   - name: Hold kubelet
     dpkg_selections:
       name: kubelet
@@ -112,5 +113,5 @@
 
   - name: Hold kubectl
     dpkg_selections:
-      name: kubelet
+      name: kubectl
       selection: hold

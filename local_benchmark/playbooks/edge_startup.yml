@@ -1,7 +1,5 @@
 ---
 - hosts: all:!cloudcore
-  vars:
-      cloud_ip: 192.168.56.2
   tasks:
   - user:
       name: "{{username}}"

@@ -1,43 +1,13 @@
 data "google_compute_image" "ubuntu" {
-  family  = "ubuntu-1804-lts"
+  family  = "ubuntu-2004-lts"
   project = "ubuntu-os-cloud"
 }
 
-/* Used to generate a token for kubeadm */
-resource "random_string" "token_part_1" {
-  length  = 6
-  special = false
-  upper   = false
-}
-
-resource "random_string" "token_part_2" {
-  length  = 16
-  special = false
-  upper   = false
-}
-
-
-data "template_file" "cloudcore_init" {
-  template = "${file("${path.module}/scripts/cloudcore_init.sh")}"
-  vars = {
-    kubeadm_token     = "${random_string.token_part_1.result}.${random_string.token_part_2.result}"
-    config_bucket_url = var.config_bucket
-  }
-}
-
-data "template_file" "edgecore_init" {
-  template = "${file("${path.module}/scripts/edgecore_init.sh")}"
-  vars = {
-    config_bucket_url = var.config_bucket
-    cloudcore_ip      = google_compute_instance.kubeedge_cloudcore.network_interface.0.access_config.0.nat_ip
-  }
-}
-
 resource "google_compute_instance" "kubeedge_cloudcore" {
-  name         = "cloudcore"
-  machine_type = "e2-small"
+  name         = "kubeedge-cloudcore"
+  machine_type = var.cloudcore_machine_type
   zone         = var.zone
-
+  tags         = ["cloudcore"]
   boot_disk {
     initialize_params {
       size  = "30"
@@ -59,26 +29,35 @@ resource "google_compute_instance" "kubeedge_cloudcore" {
   }
 
   metadata = {
-    ssh-keys = "akshay:${file("~/.ssh/id_rsa.pub")}"
+    enable-oslogin = "TRUE"
+    ssh-keys       = "akshay:${file("~/.ssh/id_rsa.pub")}"
+    user-data      = <<EOT
+#cloud-config
+packages: ["ansible"]
+write_files:
+- path: /etc/ansible/ansible.cfg
+  content: |
+      [defaults]
+      remote_tmp     = /tmp
+      local_tmp      = /tmp
+      host_key_checking = no
+      ansible_python_interpreter = /usr/bin/python3
+runcmd:
+- gsutil cp -r ${var.config_bucket}/ansible /opt
+- ansible-playbook /opt/ansible/cloud_playbook.yml --extra-vars "bucket_url=${var.config_bucket}"
+EOT
   }
-
-  provisioner "remote-exec" {
-    inline = ["sudo apt update", "sudo apt install curl -y", "echo Curl Installed!"]
-    connection {
-      host = self.ipv4_address
-      type = "ssh"
-      user = "root"
-      private_key = file(var.pvt_key)
-    }
-  }
-
-  #metadata_startup_script = data.template_file.cloudcore_init.rendered
 }
+
+#ansible-playbook /opt/ansible/controller_startup.yml --extra-vars "bucket_url=gs://edge-benchmark-config-bucket"
+
+# - ansible-playbook /opt/ansible/base_install.yml
+# - sh /opt/ansible/script/prepare_cloudcore.sh
 
 resource "google_compute_instance" "kubeedge_edgecore" {
   count        = var.edge_node_count
-  name         = "edgecore-${count.index}"
-  machine_type = "e2-small"
+  name         = "kubeedge-edgecore-${count.index}"
+  machine_type = var.edgecore_machine_type
   zone         = var.zone
 
   boot_disk {
@@ -92,9 +71,10 @@ resource "google_compute_instance" "kubeedge_edgecore" {
   network_interface {
     network    = var.vpc_name
     subnetwork = var.subnetwork_name
-    # access_config {
-
-    # }
+    access_config {
+      # This is required to add an external IP address which is then used to contact the config bucket
+      # Without it, the compute instance does not have internet access.
+    }
   }
 
   service_account {
@@ -102,19 +82,25 @@ resource "google_compute_instance" "kubeedge_edgecore" {
   }
 
   metadata = {
+    enable-oslogin = "TRUE"
     ssh-keys = "akshay:${file("~/.ssh/id_rsa.pub")}"
+    user-data      = <<EOT
+#edge-config
+packages: ["ansible"]
+write_files:
+- path: /etc/ansible/ansible.cfg
+  content: |
+      [defaults]
+      remote_tmp     = /tmp
+      local_tmp      = /tmp
+      host_key_checking = no
+      ansible_python_interpreter = /usr/bin/python3
+runcmd:
+- gsutil cp -r ${var.config_bucket}/ansible /opt
+- ansible-playbook /opt/ansible/edge_playbook.yml --extra-vars "bucket_url=${var.config_bucket}"
+EOT
   }
-
-  metadata_startup_script = data.template_file.edgecore_init.rendered
 }
-
-resource "null_resource" "download_kube_config" {
-  provisioner "local-exec" {
-    command = "sh ${path.module}/scripts/download_kube_config.sh ${var.config_bucket} ${path.module}"
-  }
-
-  provisioner "local-exec" {
-    when = destroy
-    command = "rm -f ${path.module}/output.log ${path.module}/config"
-  }
-}
+# gsutil cp -r gs://edge-benchmark-config-bucket/ansible /opt
+# 
+# ansible-playbook /opt/ansible/edge_playbook.yml --extra-vars "bucket_url=gs://edge-benchmark-config-bucket"

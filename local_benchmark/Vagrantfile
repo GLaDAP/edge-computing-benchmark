@@ -24,7 +24,7 @@ Vagrant.configure("2") do |config_edge|
     box_config.memory = 1024
     box_config.cpus = 1
   end
-  N = 1 # One edgenode(s)
+  N = 1
   (1..N).each do |edge_id|
     config_edge.vm.define "edgenode-#{edge_id}" do |edgenode|
       # Defining VM properties

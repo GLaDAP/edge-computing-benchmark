@@ -1,0 +1,105 @@
+---
+- hosts: 127.0.0.1
+  become: true
+  tasks:
+  - command: whoami
+    register: username
+
+  - user:
+      name: "{{username.stdout}}"
+      state: present
+    register: registered_user
+
+  - name: Install packages that allow apt to be used over HTTPS
+    apt:
+      name: "{{ packages }}"
+      state: present
+      update_cache: yes
+    vars:
+      packages:
+      - conntrack
+      - docker.io
+
+  - name: Ensure docker service is running
+    systemd:
+      name: docker
+      state: started
+
+  - name: Add edge user to docker group
+    user:
+      name: "{{ username.stdout }}"
+      groups: "docker, systemd-journal"
+    
+  - name: Restart docker service
+    command: systemctl restart docker
+
+  - name: Reload ip settings
+    command: sysctl -p
+
+  - name: Reload ip settings
+    command: sysctl -p
+
+  - name: Get KubeEdge and unarchive it
+    unarchive:
+      src: https://github.com/kubeedge/kubeedge/releases/download/v1.8.0/keadm-v1.8.0-linux-amd64.tar.gz
+      dest: "/{{registered_user.home}}"
+      remote_src: true
+
+  - name: Make KubeEdge executable
+    file:
+      dest: "/{{registered_user.home}}/keadm-v1.8.0-linux-amd64/keadm/keadm"
+      mode: +x
+
+  - name: Move KubeEdge executable
+    command: mv "/{{registered_user.home}}/keadm-v1.8.0-linux-amd64/keadm/keadm" /usr/local/bin
+
+  - name: Remove unneeded KubeEdge files
+    file:
+      path: "{{ item }}"
+      state: absent
+    with_items:
+      - "/{{registered_user.home}}/keadm-v1.8.0-linux-amd64"
+      - "/{{registered_user.home}}/keadm-v1.8.0-linux-amd64.tar.gz"
+
+  - name: Wait for join command to be present in the config bucket
+    shell: |
+      until gsutil -q stat {{ bucket_url }}/join-command.txt
+      do
+        sleep 15
+      done
+
+  - name: Download file
+    shell: gsutil cp -r {{ bucket_url }}/join-command.txt join-command.txt
+
+  - name: Join the cloud controller kubernetes server
+    shell: "$(cat join-command.txt)"
+
+  ####################### LOGGING #################################
+
+  - name: Enable edgestream
+    shell: "sed -z 's/enable: false/enable: true/3' /etc/kubeedge/config/edgecore.yaml > edgecore.yaml" 
+    args:
+      warn: false
+
+  - name: Move the newly created edgecore to KubeEdge directory
+    command: mv -f "edgecore.yaml" /etc/kubeedge/config/edgecore.yaml
+
+  - name: Disable KubeProxy restart
+    shell: "sed '/^ExecStart=.*/a Environment=\"CHECK_EDGECORE_ENVIRONMENT=false\"' /etc/kubeedge/edgecore.service > edgecore.service" 
+    args:
+      warn: false
+
+  - name: Move the newly created edgecore service to KubeEdge directory
+    command: mv -f "/{{registered_user.home}}/edgecore.service" /etc/kubeedge/edgecore.service
+
+  - name: Kill kube-proxy
+    shell: pkill kube-proxy || true
+
+  - name: Restart edgecore
+    command: systemctl restart edgecore.service
+
+  handlers:
+    - name: docker status
+      service:
+        name: docker
+        state: started

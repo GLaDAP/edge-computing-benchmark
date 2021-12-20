@@ -1,8 +1,11 @@
 ---
 - hosts: all:!cloudcore
   tasks:
+  - command: whoami
+    register: username
+
   - user:
-      name: "{{username}}"
+      name: "{{username.stdout}}"
       state: present
     register: registered_user
 
@@ -25,7 +28,7 @@
 
   - name: Add edge user to docker group
     user:
-      name: "{{ username }}"
+      name: "{{ username.stdout }}"
       groups: "docker, systemd-journal"
     become: true
     

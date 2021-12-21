@@ -3,6 +3,20 @@ data "google_compute_image" "ubuntu" {
   project = "ubuntu-os-cloud"
 }
 
+data "template_file" "cloudcore_init" {
+  template = "${file("${path.module}/scripts/cloudcore_init.sh")}"
+  vars = {
+    config_bucket_url = var.config_bucket
+  }
+}
+
+data "template_file" "edgecore_init" {
+  template = "${file("${path.module}/scripts/edgecore_init.sh")}"
+  vars = {
+    config_bucket_url = var.config_bucket
+  }
+}
+
 resource "google_compute_instance" "kubeedge_cloudcore" {
   name         = "kubeedge-cloudcore"
   machine_type = var.cloudcore_machine_type
@@ -42,17 +56,10 @@ write_files:
       local_tmp      = /tmp
       host_key_checking = no
       ansible_python_interpreter = /usr/bin/python3
-runcmd:
-- gsutil cp -r ${var.config_bucket}/ansible /opt
-- ansible-playbook /opt/ansible/cloud_playbook.yml --extra-vars "bucket_url=${var.config_bucket}"
 EOT
   }
+  metadata_startup_script = data.template_file.cloudcore_init.rendered
 }
-
-#ansible-playbook /opt/ansible/controller_startup.yml --extra-vars "bucket_url=gs://edge-benchmark-config-bucket"
-
-# - ansible-playbook /opt/ansible/base_install.yml
-# - sh /opt/ansible/script/prepare_cloudcore.sh
 
 resource "google_compute_instance" "kubeedge_edgecore" {
   count        = var.edge_node_count
@@ -95,12 +102,7 @@ write_files:
       local_tmp      = /tmp
       host_key_checking = no
       ansible_python_interpreter = /usr/bin/python3
-runcmd:
-- gsutil cp -r ${var.config_bucket}/ansible /opt
-- ansible-playbook /opt/ansible/edge_playbook.yml --extra-vars "bucket_url=${var.config_bucket}"
 EOT
   }
+  metadata_startup_script = data.template_file.edgecore_init.rendered
 }
-# gsutil cp -r gs://edge-benchmark-config-bucket/ansible /opt
-# 
-# ansible-playbook /opt/ansible/edge_playbook.yml --extra-vars "bucket_url=gs://edge-benchmark-config-bucket"

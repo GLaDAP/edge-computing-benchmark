@@ -1,180 +1,99 @@
 ---
 - hosts: 127.0.0.1
+  become: true
   tasks:
-  # - command: whoami
-  #   register: username
-
-  # - user:
-  #     name: "{{username.stdout}}"
-  #     state: present
-  #   register: registered_user
+  - name: Wait until the file /root/.kube/config is present before continuing
+    wait_for:
+      path: /root/.kube/config
 
   - shell: 'ip addr show ens4 | grep -o "inet [0-9]*\.[0-9]*\.[0-9]*\.[0-9]*" | grep -o "[0-9]*\.[0-9]*\.[0-9]*\.[0-9]*"'
     register: cloud_ip
 
-  # Initialize the kubernetes cluster.
-  - name: Initialize the Kubernetes cluster using kubeadm
-    command: kubeadm init --kubernetes-version=1.21.0 --apiserver-advertise-address={{ cloud_ip.stdout }} --apiserver-cert-extra-sans={{ cloud_ip.stdout }}
-    become: true
-
-  - file:
-      path: /etc/kubernetes/admin.conf
-      mode: o+r
-    become: true
-
-  # - name: Ensures {{registered_user}}/.kube
-  #   file: 
-  #     path: "{{registered_user.home}}/.kube"
-  #     state: directory
-
-  # - name: Copy file
-  #   copy:
-  #     src: /etc/kubernetes/admin.conf 
-  #     dest: "{{registered_user.home}}/.kube/config"
-  #   become: true
-    # become_user: "{{username.stdout}}"
-
-  - name: Ensures /root/.kube
-    file: 
-      path: "/root/.kube"
-      state: directory
-    become: true
-
-  - name: Copy kubeconfig to "/root/.kube/config"
-    copy:
-      src: /etc/kubernetes/admin.conf 
-      dest: "/root/.kube/config"
-    become: true
-
-  # - name: Change file ownership, group and permissions
-  #   ansible.builtin.file:
-  #     path: "{{registered_user.home}}/.kube/config"
-  #     owner: "{{registered_user.uid}}"
-  #     group: "{{registered_user.group}}"
-  #   become: true
-  #   become_user: "{{username.stdout}}"
-
   - name: Untaint the master in order to be able to run the cloudcore
     command: kubectl taint nodes node-role.kubernetes.io/master- --all
-    become: true
-    # become_user: "{{username.stdout}}"
 
   - name: Download metrics-server manifest to the cluster.
     ansible.builtin.get_url:
       url: https://docs.projectcalico.org/manifests/calico.yaml
       dest: ~/calico.yaml
       mode: '0664'
-    become: true
-    # become_user: "{{username.stdout}}"
 
   - name: Apply metrics-server manifest to the cluster.
     command: kubectl apply -f ~/calico.yaml
-    become: true
-    # become_user: "{{username.stdout}}"
+
   ######################################### KUBEEDGE ###################################
   - name: Unarchive keadm
     ansible.builtin.unarchive:
       src: https://github.com/kubeedge/kubeedge/releases/download/v1.8.2/keadm-v1.8.2-linux-amd64.tar.gz
-      # dest: "/{{registered_user.home}}/"
       dest: "/root/"
       remote_src: yes
-    become: true
 
   - name: Make keadm executable
     file: 
       dest: /root/keadm-v1.8.2-linux-amd64/keadm/keadm
-      # dest: /{{registered_user.home}}/keadm-v1.8.2-linux-amd64/keadm/keadm
       mode: u+x
-    become: true
 
   - name: Execute keadm
     command: |
       /root/keadm-v1.8.2-linux-amd64/keadm/keadm init --kubeedge-version=1.8.2 --advertise-address={{ cloud_ip.stdout }} --kube-config=/root/.kube/config
-    become: true
       
-  # {{registered_user.home}}/keadm-v1.8.2-linux-amd64/keadm/keadm init --kubeedge-version=1.8.2 --advertise-address={{ cloud_ip.stdout }} --kube-config=/{{registered_user.home}}/.kube/config
   ########################################### LOGGING  #####################################
   - name: Get certgen and fix permissions
     get_url:
       url: https://raw.githubusercontent.com/kubeedge/kubeedge/master/build/tools/certgen.sh
       dest: "/root/"
-      # dest: "{{registered_user.home}}"
       mode: '0755'
-    become: true
 
   - name: Get certgen and fix permissions
     get_url:
       url: https://github.com/kubernetes-sigs/metrics-server/releases/download/v0.5.2/components.yaml
       dest: "/root/deploy.yaml"
-      # dest: "{{registered_user.home}}/deploy.yaml"
       mode: '0755'
-    become: true
 
   - name: Move certgen to KubeEdge directory
     command: mv "/root/certgen.sh" /etc/kubeedge/
-    # command: mv "{{registered_user.home}}/certgen.sh" /etc/kubeedge/
-    become: true
 
   - name: Execute certgen
     shell: CLOUDCOREIPS="{{ cloud_ip.stdout }}" /etc/kubeedge/certgen.sh stream
-    become: true
   
   - name: Add ip to ip table
     command: iptables -t nat -A OUTPUT -p tcp --dport 10351 -j DNAT --to {{ cloud_ip.stdout }}:10003
-    become: true
 
   - name: Enable cloudstream
     shell: "sed -z 's/enable: false/enable: true/2' /etc/kubeedge/config/cloudcore.yaml > /root/cloudcore.yaml" 
-    # shell: "sed -z 's/enable: false/enable: true/2' /etc/kubeedge/config/cloudcore.yaml > {{registered_user.home}}/cloudcore.yaml" 
     args:
       warn: false
-    become: true
 
   - name: Move the newly created cloudcore to KubeEdge directory
     command: mv -f "/root/cloudcore.yaml" /etc/kubeedge/config/cloudcore.yaml
-    # command: mv -f "{{registered_user.home}}/cloudcore.yaml" /etc/kubeedge/config/cloudcore.yaml
-    become: true
 
   - name: Kill cloudcore
     command: pkill cloudcore
-    become: true
 
   - name: Restart cloudcore
     command: sudo su -c 'nohup cloudcore > cloudcore.log 2>&1 &'
     args:
       warn: false
-    become: true
 
   - name: Copy metrics yaml to local directory from remote"
     copy:
       src: "/opt/ansible/manifests/metrics.yaml"
       dest: "/root/metrics.yaml"
-      # src: "{{registered_user.home}}/manifests/cloudcore/metrics.yaml"
-      # dest: "{{registered_user.home}}/metrics.yaml"
       remote_src: true
-    become: true
 
   - name: Add metrics server
     command: kubectl apply -f /root/metrics.yaml
-    # command: kubectl apply -f {{registered_user.home}}/metrics.yaml
-    become: true
 
   ################################### TOKEN #####################################
   - name: Get join token console
     command: |
       /root/keadm-v1.8.2-linux-amd64/keadm/keadm gettoken
     register: token_command
-    become: true
       
-#{{registered_user.home}}/keadm-v1.8.2-linux-amd64/keadm/keadm gettoken
   - local_action:
       module: copy
       content: "keadm join --cloudcore-ipport={{ cloud_ip.stdout }}:10000 --token={{ token_command.stdout }} --kubeedge-version=1.8.0"
       dest: "/root/join-command.txt"
-      # dest: "/{{registered_user.home}}/join-command.txt"
 
-  ## Upload to configuration bucket
   - name: Copy join command to google cloud bucket
     command: "gsutil cp /root/join-command.txt {{ bucket_url }}"
-    # command: "gsutil cp {{ registered_user.home }}/join-command.txt {{ bucket_url }}"
-    become: true

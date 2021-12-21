@@ -6,6 +6,8 @@ Cloud computing represents the defacto standard for computing today, where a use
 
 This repository contains Terraform code (Infrastructure-as-Code) to deploy an *n*-node [KubeEdge](https://kubeedge.io/en/) cluster, a Kubernetes based resource manager for the edge, onto the Google Cloud Platform and code to deploy an *n*-node KubeEdge cluster locally using Vagrant. Each virtual machine is then provisioned using Ansible playbooks.
 
+This project is done in the context of the course Distributed Systems at the Vrije Universiteit Amsterdam, 2021. 
+
 ## Repository Structure
 
 - `cloud_benchmark/` contains all files required to deploy the KubeEdge cluster to Google Cloud using Terraform.
@@ -89,7 +91,7 @@ The number of edge cores can be changed by modifying the number in the for-loop.
 -   *NOTE: Do not change the Vagrantfile while having VMs deployed. Otherwise the VMs are not recognized.*
 -   *NOTE: Make sure vboxnet0 network adapter is present on the system to prevent VMs not discovering each other*.
 
-4.   Execute `vagrant up --provider virtualbox` and wait until all the VM's are created. This can take some time depending on the amount of VM's specified as each VM is created and then the Ansible playbooks are ran.
+Execute `vagrant up --provider virtualbox` and wait until all the VM's are created. This can take some time depending on the amount of VM's specified as each VM is created and then the Ansible playbooks are ran.
 
 ## Ansible Playbooks
 
@@ -169,7 +171,7 @@ The EdgeCores are provisioned automatically and the Ansible Playbooks will wait 
   
 2. If there is nothing under `/opt/`, then you will have to copy the files from the bucket using:
      ```sudo gsutil cp -r gs://edge-benchmark-config-bucket/ansible /opt``` Run the ansible-playbooks on the edgecores with the following command  (replace the `bucket_url` with your own config bucket):
-  
+
 
 ```shell
 ansible-playbook /opt/ansible/edge_playbook.yml --extra-vars "bucket_url=gs://edge-benchmark-config-bucket"

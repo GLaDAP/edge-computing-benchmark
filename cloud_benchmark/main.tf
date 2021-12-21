@@ -12,7 +12,6 @@ module "vpc" {
   subnetwork_name = var.subnetwork_name
 }
 
-/*  */
 module "kubeedge" {
   source                 = "./modules/kubeedge"
   config_bucket          = google_storage_bucket.config_bucket.url
@@ -20,7 +19,6 @@ module "kubeedge" {
   zone                   = var.zone
   subnetwork_name        = module.vpc.subnetwork_1_name
   edge_node_count        = var.edge_node_count
-  # pvt_key                = var.pvt_key
   cloudcore_machine_type = var.cloudcore_machine_type
   edgecore_machine_type  = var.edgecore_machine_type
 }

@@ -3,26 +3,40 @@
 
 Vagrant.configure("2") do |config|
   config.vm.define "cloudcore" do |cloudcore|
-      cloudcore.vm.box = "ubuntu/bionic64"
-      cloudcore.vm.hostname = "cloudcore"
-      cloudcore.vm.synced_folder "manifests/", "/home/vagrant/manifests"
-      cloudcore.vm.network "private_network", ip: "192.168.56.2"
-
-      cloudcore.vm.provider "virtualbox" do |v|
-        v.memory = 2048
-        v.cpus = 2
-      end
-  end
-  (1..3).each do |i|
-    config.vm.define "edgenode-#{i}" do |edgenode|
-        edgenode.vm.box = "ubuntu/bionic64"
-        edgenode.vm.hostname = "edgenode-#{i}"
-        edgenode.vm.synced_folder "manifests/edgecore", "/home/vagrant/manifests/edgecore"
-        edgenode.vm.network "private_network", ip: "192.168.56.#{i + 3}"
-        edgenode.vm.provider "virtualbox" do |v|
-          v.memory = 1024
-          v.cpus = 1
-        end
+    cloudcore.vm.box = "ubuntu/bionic64"
+    cloudcore.vm.hostname = "cloudcore"
+    cloudcore.vm.synced_folder "manifests/", "/home/vagrant/manifests"
+    cloudcore.vm.network "private_network", ip: "192.168.56.2"
+    cloudcore.vm.provider "virtualbox" do |v|
+      v.memory = 2048
+      v.cpus = 2
+    end
+    config.vm.provision "ansible_local" do |ansible_cloudcore|
+      ansible_cloudcore.playbook = "playbooks/cloud_playbook.yml"
+      ansible_cloudcore.config_file = "playbooks/ansible.cfg"
     end
   end
+end
+Vagrant.configure("2") do |config_edge|
+  config_edge.vm.box = "ubuntu/bionic64"
+  config_edge.vm.synced_folder "manifests/edgecore", "/home/vagrant/manifests/edgecore"
+  config_edge.vm.provider "virtualbox" do |box_config|
+    box_config.memory = 1024
+    box_config.cpus = 1
+  end
+  N = 1
+  (1..N).each do |edge_id|
+    config_edge.vm.define "edgenode-#{edge_id}" do |edgenode|
+      # Defining VM properties
+      edgenode.vm.hostname = "edgenode-#{edge_id}"
+      edgenode.vm.network "private_network", ip: "192.168.56.#{edge_id + 100}"
+      if edge_id == N
+        edgenode.vm.provision "ansible" do |ansible_edgecore|
+          ansible_edgecore.limit = "all"
+          ansible_edgecore.playbook = "playbooks/edge_playbook.yml"
+          ansible_edgecore.config_file = "playbooks/ansible.cfg"
+        end
+      end
+		end
+	end
 end

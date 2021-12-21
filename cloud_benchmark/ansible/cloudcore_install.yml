@@ -1,0 +1,223 @@
+---
+- hosts: 127.0.0.1
+  become: true
+  tasks:
+  - name: Add containerd configuration
+    shell:
+      cmd: |
+        tee -a /etc/modules-load.d/containerd.conf <<'EOF'
+        overlay
+        br_netfilter
+        EOF
+
+  - modprobe:
+      name: overlay
+      state: present
+  - modprobe:
+      name: br_netfilter
+      state: present
+
+  - name: Enable ipv4 forwarding and bridging
+    shell:
+      cmd: |
+        tee /etc/sysctl.d/99-kubernetes-cri.conf <<'EOF'
+        net.bridge.bridge-nf-call-iptables  = 1
+        net.ipv4.ip_forward                 = 1
+        net.bridge.bridge-nf-call-ip6tables = 1
+        EOF
+    register: firewall
+
+  - shell: sysctl -p --system
+    when: firewall.changed
+
+  - name: Install packages that allow apt to be used over HTTPS
+    apt:
+      name: "{{ packages }}"
+      state: present
+      update_cache: yes
+    vars:
+      packages:
+      - python3-apt 
+      - apt-transport-https
+      - ca-certificates
+      - curl
+      - gnupg-agent
+      - software-properties-common
+      - containerd
+
+  - name: Make sure a service containerd is running
+    ansible.builtin.systemd:
+      state: started
+      name: containerd
+
+  - name: Enable service containerd and ensure it is not masked
+    ansible.builtin.systemd:
+      name: containerd
+      enabled: yes
+
+  # Disable swap for K8s
+  - name: Remove swapfile from /etc/fstab
+    mount:
+      name: "{{ item }}"
+      fstype: swap
+      state: absent
+    with_items:
+      - swap
+      - none
+
+  - name: Disable swap
+    command: swapoff -a
+    when: ansible_swaptotal_mb > 0
+
+  - name: Reload ip settings
+    command: sysctl -p
+
+  - name: Add an apt signing key for Kubernetes
+    apt_key:
+      url: https://packages.cloud.google.com/apt/doc/apt-key.gpg
+      state: present
+
+  - name: Adding apt repository for Kubernetes
+    apt_repository:
+      repo: deb https://apt.kubernetes.io/ kubernetes-xenial main
+      state: present
+      filename: kubernetes.list
+
+  - name: Install Kubernetes binaries
+    apt: 
+      name: "{{ packages }}"
+      state: present
+      update_cache: true
+    vars:
+      packages:
+        - kubelet=1.21.0-00
+        - kubeadm=1.21.0-00
+        - kubectl=1.21.0-00
+
+  - name: Hold kubelet
+    dpkg_selections:
+      name: kubelet
+      selection: hold
+
+  - name: Hold kubeadm
+    dpkg_selections:
+      name: kubeadm
+      selection: hold
+
+  - name: Hold kubectl
+    dpkg_selections:
+      name: kubectl
+      selection: hold
+
+#########################################33
+
+  - shell: 'ip addr show ens4 | grep -o "inet [0-9]*\.[0-9]*\.[0-9]*\.[0-9]*" | grep -o "[0-9]*\.[0-9]*\.[0-9]*\.[0-9]*"'
+    register: cloud_ip
+
+  # Initialize the kubernetes cluster.
+  - name: Initialize the Kubernetes cluster using kubeadm
+    command: nohup kubeadm init --kubernetes-version=1.21.0 --apiserver-advertise-address={{ cloud_ip.stdout }} --apiserver-cert-extra-sans={{ cloud_ip.stdout }}
+
+  - file:
+      path: /etc/kubernetes/admin.conf
+      mode: o+r
+
+  - name: Ensures /root/.kube
+    file: 
+      path: "/root/.kube"
+      state: directory
+
+  - name: Copy kubeconfig to "/root/.kube/config"
+    copy:
+      src: /etc/kubernetes/admin.conf 
+      dest: "/root/.kube/config"
+
+  - name: Untaint the master in order to be able to run the cloudcore
+    command: kubectl taint nodes node-role.kubernetes.io/master- --all
+
+  - name: Download metrics-server manifest to the cluster.
+    ansible.builtin.get_url:
+      url: https://docs.projectcalico.org/manifests/calico.yaml
+      dest: ~/calico.yaml
+      mode: '0664'
+
+  - name: Apply metrics-server manifest to the cluster.
+    command: kubectl apply -f ~/calico.yaml
+
+  ######################################### KUBEEDGE ###################################
+  - name: Unarchive keadm
+    ansible.builtin.unarchive:
+      src: https://github.com/kubeedge/kubeedge/releases/download/v1.8.2/keadm-v1.8.2-linux-amd64.tar.gz
+      dest: "/root/"
+      remote_src: yes
+
+  - name: Make keadm executable
+    file: 
+      dest: /root/keadm-v1.8.2-linux-amd64/keadm/keadm
+      mode: u+x
+
+  - name: Execute keadm
+    command: |
+      /root/keadm-v1.8.2-linux-amd64/keadm/keadm init --kubeedge-version=1.8.2 --advertise-address={{ cloud_ip.stdout }} --kube-config=/root/.kube/config
+      
+  ########################################### LOGGING  #####################################
+  - name: Get certgen and fix permissions
+    get_url:
+      url: https://raw.githubusercontent.com/kubeedge/kubeedge/master/build/tools/certgen.sh
+      dest: "/root/"
+      mode: '0755'
+
+  - name: Get certgen and fix permissions
+    get_url:
+      url: https://github.com/kubernetes-sigs/metrics-server/releases/download/v0.5.2/components.yaml
+      dest: "/root/deploy.yaml"
+      mode: '0755'
+
+  - name: Move certgen to KubeEdge directory
+    command: mv "/root/certgen.sh" /etc/kubeedge/
+
+  - name: Execute certgen
+    shell: CLOUDCOREIPS="{{ cloud_ip.stdout }}" /etc/kubeedge/certgen.sh stream
+  
+  - name: Add ip to ip table
+    command: iptables -t nat -A OUTPUT -p tcp --dport 10351 -j DNAT --to {{ cloud_ip.stdout }}:10003
+
+  - name: Enable cloudstream
+    shell: "sed -z 's/enable: false/enable: true/2' /etc/kubeedge/config/cloudcore.yaml > /root/cloudcore.yaml" 
+    args:
+      warn: false
+
+  - name: Move the newly created cloudcore to KubeEdge directory
+    command: mv -f "/root/cloudcore.yaml" /etc/kubeedge/config/cloudcore.yaml
+
+  - name: Kill cloudcore
+    command: pkill cloudcore
+
+  - name: Restart cloudcore
+    command: sudo su -c 'nohup cloudcore > cloudcore.log 2>&1 &'
+    args:
+      warn: false
+
+  - name: Copy metrics yaml to local directory from remote"
+    copy:
+      src: "/opt/ansible/manifests/metrics.yaml"
+      dest: "/root/metrics.yaml"
+      remote_src: true
+
+  - name: Add metrics server
+    command: kubectl apply -f /root/metrics.yaml
+
+  ################################### TOKEN #####################################
+  - name: Get join token console
+    command: |
+      /root/keadm-v1.8.2-linux-amd64/keadm/keadm gettoken
+    register: token_command
+      
+  - local_action:
+      module: copy
+      content: "keadm join --cloudcore-ipport={{ cloud_ip.stdout }}:10000 --token={{ token_command.stdout }} --kubeedge-version=1.8.0"
+      dest: "/root/join-command.txt"
+
+  ## Upload to configuration bucket
+  - name: Copy join command to google cloud bucket
+    command: "gsutil cp /root/join-command.txt {{ bucket_url }}"
